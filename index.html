@@ -80,11 +80,19 @@
     max-height: 120px; overflow-y: auto;
   }
   .warnings ul { margin: 6px 0 0; padding-left: 18px; }
+  .hint-bar {
+    max-width: 1500px;
+    margin: 14px auto 0;
+    padding: 10px 24px 0;
+    font-size: 13px;
+    color: #92400e;
+  }
+  .hint-bar b { color: #b45309; }
   .actions {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    padding: 14px 24px 0;
+    padding: 10px 24px 0;
     max-width: 1500px;
     margin: 0 auto;
   }
@@ -179,8 +187,13 @@
   </section>
 </main>
 
+<div class="hint-bar" id="hintBar">
+  💡 <b>目錄要能正常跳，請用「複製 HTML 原始碼」</b>，貼進 CMS 工具列的「原始碼 / <code>&lt;&gt;</code>」模式。<br>
+  用「複製內容（所見即所得）」貼上時，瀏覽器會把目錄的相對連結改成連回本工具網址，導致點了跳不到對應區塊。
+</div>
 <div class="actions">
-  <button type="button" class="btn btn-primary" id="copyBtn" disabled>複製內容（貼進 CMS）</button>
+  <button type="button" class="btn btn-primary" id="srcBtn" disabled>複製 HTML 原始碼（建議，目錄才會跳）</button>
+  <button type="button" class="btn btn-secondary" id="copyBtn" disabled>複製內容（所見即所得）</button>
   <button type="button" class="btn btn-secondary" id="downloadBtn" disabled>下載 .html</button>
   <span class="spacer"></span>
   <button type="button" class="btn btn-secondary" id="clearBtn">換一個檔</button>
@@ -535,6 +548,7 @@ const previewFrame = document.getElementById('previewFrame');
 const sourceBox = document.getElementById('sourceBox');
 const statusEl = document.getElementById('status');
 const warningsEl = document.getElementById('warnings');
+const srcBtn = document.getElementById('srcBtn');
 const copyBtn = document.getElementById('copyBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const toastEl = document.getElementById('toast');
@@ -579,9 +593,10 @@ async function handleFile(file) {
     previewFrame.srcdoc = lastFullDoc;
     sourceBox.value = lastBodyInner;
 
+    srcBtn.disabled = false;
     copyBtn.disabled = false;
     downloadBtn.disabled = false;
-    setStatus('✅ 已轉換：' + file.name + '（右側可預覽，按「複製內容」貼進 CMS）');
+    setStatus('✅ 已轉換：' + file.name + '（右側可預覽，建議按「複製 HTML 原始碼」貼進 CMS 原始碼模式）');
     renderWarnings(result.messages);
     showToast('轉換完成');
   } catch (e) {
@@ -634,6 +649,30 @@ function fallbackCopyHtml(html) {
   return ok;
 }
 
+/* 複製 HTML 原始碼（純文字）→ 貼進 CMS 原始碼模式，相對連結與 id 完整保留，目錄才會跳 */
+async function copySource() {
+  if (!lastBodyInner) { showToast('請先上傳檔案', true); return; }
+  const text = lastBodyInner;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      showToast('已複製 HTML 原始碼，貼進 CMS 的「原始碼 / <>」模式即可');
+      return;
+    }
+  } catch (e) { /* 落到備援 */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.body.removeChild(ta);
+  showToast(ok ? '已複製 HTML 原始碼，貼進 CMS 的「原始碼 / <>」模式即可' : '複製失敗，請改用「下載 .html」', !ok);
+}
+srcBtn.addEventListener('click', copySource);
+
 async function copyContent() {
   if (!lastBodyInner) { showToast('請先上傳檔案', true); return; }
   const html = lastBodyInner;
@@ -682,6 +721,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   warningsEl.innerHTML = '';
   lastBodyInner = '';
   lastFullDoc = '';
+  srcBtn.disabled = true;
   copyBtn.disabled = true;
   downloadBtn.disabled = true;
   setStatus('');
