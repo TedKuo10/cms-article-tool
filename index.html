@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文章排版轉換工具</title>
+<style>
+  :root {
+    --accent: #4f8ef7;
+    --border: #d8dde6;
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 16px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 16px 24px 40px;
+    max-width: 1500px;
+    margin: 0 auto;
+    align-items: start;
+  }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .panel-title {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    background: #fafbfc;
+  }
+  .toolbar button {
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .toolbar button:hover { background: #eef2f7; }
+  .toolbar .sep { width: 1px; background: var(--border); margin: 2px 4px; }
+  #editor {
+    min-height: 460px;
+    padding: 18px 20px;
+    outline: none;
+    font-size: 15px;
+    line-height: 1.7;
+    overflow-y: auto;
+    max-height: 70vh;
+  }
+  #editor:empty::before {
+    content: attr(data-placeholder);
+    color: #aab2bd;
+  }
+  #editor h1 { font-size: 1.6em; }
+  #editor h2 { font-size: 1.35em; color: #036; }
+  #editor h3 { font-size: 1.15em; }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 24px 0;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+  .actions .spacer { flex: 1; }
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3b7de0; }
+  .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: #eef2f7; }
+  #previewFrame {
+    width: 100%;
+    height: 70vh;
+    min-height: 460px;
+    border: none;
+    background: #fff;
+  }
+  #sourceBox {
+    width: 100%;
+    height: 240px;
+    border: none;
+    border-top: 1px solid var(--border);
+    padding: 12px 14px;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px;
+    resize: vertical;
+    display: none;
+  }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1f2937;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all .25s ease;
+    z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { background: #b91c1c; }
+  .linkbtn {
+    background: none; border: none; color: var(--accent);
+    font-size: 12px; cursor: pointer; padding: 0;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>文章排版轉換工具</h1>
+  <p>從 Word 貼上內容 → 標記標題與格式 → 轉換成符合 CMS 樣式的內容 → 一鍵複製貼進 CMS。所有處理都在你的瀏覽器本機完成，內容不會上傳。</p>
+</header>
+
+<main>
+  <!-- 編輯區 -->
+  <section class="panel">
+    <div class="panel-title">
+      <span>① 編輯內容</span>
+      <span style="font-weight:400; color:var(--muted);">可直接從 Word 複製貼上</span>
+    </div>
+    <div class="toolbar" id="toolbar">
+      <button type="button" data-cmd="formatBlock" data-val="h1" title="大標題 H1">H1</button>
+      <button type="button" data-cmd="formatBlock" data-val="h2" title="中標題 H2">H2</button>
+      <button type="button" data-cmd="formatBlock" data-val="h3" title="小標題 H3">H3</button>
+      <button type="button" data-cmd="formatBlock" data-val="p" title="一般內文">內文</button>
+      <span class="sep"></span>
+      <button type="button" data-cmd="bold" title="粗體"><b>B</b></button>
+      <button type="button" data-cmd="italic" title="斜體"><i>I</i></button>
+      <span class="sep"></span>
+      <button type="button" data-cmd="insertUnorderedList" title="項目清單">• 清單</button>
+      <button type="button" data-cmd="insertOrderedList" title="編號清單">1. 清單</button>
+      <span class="sep"></span>
+      <button type="button" id="linkBtn" title="插入超連結">🔗 連結</button>
+      <button type="button" id="unlinkBtn" title="移除超連結">取消連結</button>
+      <span class="sep"></span>
+      <button type="button" data-cmd="removeFormat" title="清除文字格式">清除格式</button>
+    </div>
+    <div id="editor" contenteditable="true" data-placeholder="在這裡貼上文章內容，或直接打字…"></div>
+  </section>
+
+  <!-- 預覽區 -->
+  <section class="panel">
+    <div class="panel-title">
+      <span>② 轉換預覽</span>
+      <button type="button" class="linkbtn" id="toggleSource">顯示 / 隱藏 HTML 原始碼</button>
+    </div>
+    <iframe id="previewFrame" title="轉換預覽"></iframe>
+    <textarea id="sourceBox" readonly spellcheck="false"></textarea>
+  </section>
+</main>
+
+<div class="actions">
+  <button type="button" class="btn btn-primary" id="convertBtn">轉換 →</button>
+  <button type="button" class="btn btn-primary" id="copyBtn">複製內容（貼進 CMS）</button>
+  <button type="button" class="btn btn-secondary" id="downloadBtn">下載 .html</button>
+  <span class="spacer"></span>
+  <button type="button" class="btn btn-secondary" id="clearBtn">清空</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+ *  文章排版轉換工具 —— 純前端，無外部相依
+ *  轉換規則忠實移植自原本的 Colab Python 腳本
+ *  (convert_docx_to_html + apply_auto_toc_and_smooth + table_to_html)
+ *  差異（依需求刻意調整）：
+ *   - 保留粗體 <strong> / 斜體 <em>（原 Python 會丟掉）
+ *   - 新增清單 <ul>/<ol> 輸出
+ *   - 標題以編輯器中的真實 h1/h2/h3 標籤偵測
+ *   - H2 色碼 #07788 完全照原樣保留（未修正）
+ *   - H1 不輸出（比照舊工具）
+ * ========================================================================= */
+
+const BLOCK_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','div','ul','ol','table','blockquote','pre']);
+
+/* ---------- 小工具 ---------- */
+function escapeHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttr(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* 判斷「邏輯上」的標題層級：真實 h1-h3，或 Word 貼上的 MsoHeading 類別 */
+function logicalTag(el) {
+  const t = el.tagName.toLowerCase();
+  if (t === 'h1' || t === 'h2' || t === 'h3') return t;
+  const cls = (el.className || '').toLowerCase();
+  let m = cls.match(/mso[a-z]*heading\s*([1-3])/) || cls.match(/(?:^|\s)heading\s*([1-3])/);
+  if (m) return 'h' + m[1];
+  if (/msotitle/.test(cls)) return 'h1';
+  return t;
+}
+
+/* ---------- 行內內容序列化（取代 paragraph_to_html_with_links）---------- */
+function serializeInline(node) {
+  let out = '';
+  node.childNodes.forEach(child => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      out += escapeHtml(child.nodeValue);
+      return;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) return;
+    const t = child.tagName.toLowerCase();
+    if (t === 'a') {
+      const href = child.getAttribute('href') || '';
+      const inner = serializeInline(child);
+      out += href ? `<a href="${escapeAttr(href)}" target="_blank">${inner}</a>` : inner;
+    } else if (t === 'br') {
+      out += '<br>';
+    } else if (t === 'strong' || t === 'b') {
+      out += `<strong>${serializeInline(child)}</strong>`;
+    } else if (t === 'em' || t === 'i') {
+      out += `<em>${serializeInline(child)}</em>`;
+    } else if (t === 'ul' || t === 'ol') {
+      out += listToHtml(child);
+    } else {
+      out += wrapByStyle(child);
+    }
+  });
+  return out;
+}
+
+/* 處理 <span style="font-weight:bold"> 之類的（Word 常見）*/
+function wrapByStyle(el) {
+  let inner = serializeInline(el);
+  const style = (el.getAttribute('style') || '').toLowerCase();
+  const bold = /font-weight\s*:\s*(bold|bolder|[6-9]00)/.test(style);
+  const italic = /font-style\s*:\s*italic/.test(style);
+  if (italic) inner = `<em>${inner}</em>`;
+  if (bold) inner = `<strong>${inner}</strong>`;
+  return inner;
+}
+
+/* ---------- 清單 ---------- */
+function listToHtml(list) {
+  const tag = list.tagName.toLowerCase();
+  let out = `<${tag}>`;
+  Array.from(list.children).forEach(li => {
+    if (li.tagName.toLowerCase() === 'li') {
+      out += `<li>${serializeInline(li)}</li>`;
+    }
+  });
+  out += `</${tag}>`;
+  return out;
+}
+
+/* ---------- 表格（移植 table_to_html）---------- */
+function serializeCell(cell) {
+  const blocks = Array.from(cell.children).filter(c => {
+    const t = c.tagName.toLowerCase();
+    return t === 'p' || t === 'div';
+  });
+  if (blocks.length) {
+    return blocks.map(b => serializeInline(b)).join('<br>');
+  }
+  return serializeInline(cell);
+}
+function tableToHtml(table) {
+  const html = ['<table style="border-collapse:collapse; table-layout:auto; border:1px solid #ccc; margin-left:0; margin-right:auto;">'];
+  Array.from(table.rows).forEach((row, rIndex) => {
+    html.push('<tr>');
+    Array.from(row.cells).forEach(cell => {
+      let cellHtml = serializeCell(cell);
+      if (rIndex === 0) cellHtml = `<strong>${cellHtml}</strong>`;
+      html.push(`<td style="border:1px solid #ccc; padding:6px; vertical-align:top;">${cellHtml}</td>`);
+    });
+    html.push('</tr>');
+  });
+  html.push('</table>');
+  return html.join('');
+}
+
+/* ---------- 把編輯器內容整理成最上層 block 陣列 ---------- */
+function collectBlocks(parent, blocks) {
+  let pending = null;
+  const flush = () => {
+    if (pending && pending.textContent.trim()) blocks.push(pending);
+    pending = null;
+  };
+  Array.from(parent.childNodes).forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.nodeValue.trim()) {
+        if (!pending) pending = document.createElement('p');
+        pending.appendChild(node.cloneNode(true));
+      }
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const t = node.tagName.toLowerCase();
+    if (t === 'div') {
+      const hasBlockChild = Array.from(node.children).some(c => BLOCK_TAGS.has(c.tagName.toLowerCase()));
+      if (hasBlockChild) {
+        flush();
+        collectBlocks(node, blocks);
+      } else {
+        flush();
+        const p = document.createElement('p');
+        p.className = node.className || '';
+        Array.from(node.childNodes).forEach(c => p.appendChild(c.cloneNode(true)));
+        if (p.textContent.trim()) blocks.push(p);
+      }
+    } else if (BLOCK_TAGS.has(t)) {
+      flush();
+      blocks.push(node);
+    } else {
+      if (!pending) pending = document.createElement('p');
+      pending.appendChild(node.cloneNode(true));
+    }
+  });
+  flush();
+}
+
+/* ---------- 自動目錄 + 平滑捲動（移植 apply_auto_toc_and_smooth）---------- */
+function applyAutoTocAndSmooth(htmlList) {
+  let updated = [];
+  const toc = [];
+  let firstH2Index = null;
+  const smoothCss = "<style>html { scroll-behavior: smooth; } .html-container h2, .html-container h3, h2, h3 { scroll-margin-top: 130px; }</style>";
+  updated.push(smoothCss);
+
+  for (let block of htmlList) {
+    const b = (block || '').trim();
+    const plainText = b ? b.replace(/<[^>]*>/g, '') : '';
+
+    if (b.startsWith('<h1')) {
+      const anchor = `toc-h1-${toc.length}`;
+      toc.push([1, plainText, anchor]);
+      block = block.replace('<h1>', `<h1 id='${anchor}'>`);
+    } else if (b.startsWith('<h2')) {
+      const anchor = `toc-h2-${toc.length}`;
+      toc.push([2, plainText, anchor]);
+      block = block.replace('<h2', `<h2 id='${anchor}'`);
+      if (firstH2Index === null) firstH2Index = updated.length;
+    } else if (b.startsWith('<h3')) {
+      const anchor = `toc-h3-${toc.length}`;
+      toc.push([3, plainText, anchor]);
+      block = block.replace('<h3', `<h3 id='${anchor}'`);
+    }
+    updated.push(block);
+  }
+
+  if (firstH2Index === null || toc.length === 0) return updated;
+
+  const isBlankPara = (x) => {
+    const s = (x || '').trim();
+    return s === '<p>&nbsp;</p>' || s === '<p>&nbsp;</p><p>&nbsp;</p>';
+  };
+  while (firstH2Index - 1 >= 0 && isBlankPara(updated[firstH2Index - 1])) {
+    updated.splice(firstH2Index - 1, 1);
+    firstH2Index -= 1;
+  }
+
+  const tocHtml = [
+    "<div style='margin-top:28px; margin-bottom:12px; padding:12px 0 12px 16px; border-left:4px solid #4f8ef7;'>",
+    "<div style='font-size:20px; font-weight:700; margin-bottom:10px; color:#000000;'>文章目錄</div>",
+    "<ul style='list-style:none; margin-left: 28px; padding-left: 0; line-height:1.8; font-size:17px; color:#4f8ef7;'>"
+  ];
+  for (const [level, text, anchor] of toc) {
+    const safeText = text ? escapeHtml(text) : '';
+    let bullet, indentPx;
+    if (level <= 2) { bullet = '•'; indentPx = 0; }
+    else { bullet = '◦'; indentPx = 18; }
+    tocHtml.push(
+      `<li style='margin:6px 0; padding-left:${indentPx}px; text-indent:-12px;'>` +
+      `<span style='display:inline-block; width:12px; opacity:0.7;'>${bullet}</span>` +
+      `<a href='#${anchor}' style='color:#4f8ef7; text-decoration:none;'>${safeText}</a>` +
+      `</li>`
+    );
+  }
+  tocHtml.push("</ul></div>");
+
+  updated = updated.slice(0, firstH2Index).concat(tocHtml, updated.slice(firstH2Index));
+  const insertAfterToc = firstH2Index + tocHtml.length;
+  updated = updated.slice(0, insertAfterToc).concat(["<p>&nbsp;</p><p>&nbsp;</p>"], updated.slice(insertAfterToc));
+  return updated;
+}
+
+/* ---------- 主轉換（移植 convert_docx_to_html 的主迴圈）---------- */
+function convertEditor(editor) {
+  const blocks = [];
+  collectBlocks(editor, blocks);
+
+  let htmlOutput = [];
+  let lastWasBlank = false;
+
+  for (let idx = 0; idx < blocks.length; idx++) {
+    const el = blocks[idx];
+    const realTag = el.tagName.toLowerCase();
+    const tag = logicalTag(el);
+    const next = blocks[idx + 1] || null;
+    const nextIsHeadingOrTable = !!next && (
+      ['h2', 'h3'].includes(logicalTag(next)) || next.tagName.toLowerCase() === 'table'
+    );
+
+    if (realTag === 'table') {
+      if (!lastWasBlank) htmlOutput.push('<p>&nbsp;</p>');
+      htmlOutput.push(tableToHtml(el));
+      htmlOutput.push('<p>&nbsp;</p>');
+      lastWasBlank = true;
+      continue;
+    }
+
+    if (realTag === 'ul' || realTag === 'ol') {
+      htmlOutput.push(listToHtml(el));
+      if (!nextIsHeadingOrTable) {
+        htmlOutput.push('<p>&nbsp;</p>');
+        lastWasBlank = true;
+      } else {
+        lastWasBlank = false;
+      }
+      continue;
+    }
+
+    if (tag === 'h1') {
+      continue; // 比照舊工具：H1 不輸出
+    }
+
+    const text = el.textContent.trim();
+    if (!text) continue;
+
+    const contentHtml = serializeInline(el);
+
+    if (tag === 'h2') {
+      htmlOutput.push(lastWasBlank ? '<p>&nbsp;</p>' : '<p>&nbsp;</p><p>&nbsp;</p>');
+      htmlOutput.push(
+        '<h2 style="padding-top:150px; margin-top:-150px;">' +
+        '<span style="color:#07788;"><span style="font-size:20px;"><strong>' +
+        contentHtml +
+        '</strong></span></span></h2>'
+      );
+      htmlOutput.push('<p>&nbsp;</p>');
+      lastWasBlank = true;
+      continue;
+    }
+
+    if (tag === 'h3') {
+      if (!lastWasBlank) htmlOutput.push('<p>&nbsp;</p>');
+      htmlOutput.push(
+        '<h3 style="padding-top:150px; margin-top:-150px;">' +
+        '<span style="color:#000000;"><span style="font-size:18px;"><strong>' +
+        contentHtml +
+        '</strong></span></span></h3>'
+      );
+      htmlOutput.push('<p>&nbsp;</p>');
+      lastWasBlank = true;
+      continue;
+    }
+
+    // 一般段落
+    htmlOutput.push(`<p>${contentHtml}</p>`);
+    if (!nextIsHeadingOrTable) {
+      htmlOutput.push('<p>&nbsp;</p>');
+      lastWasBlank = true;
+    } else {
+      lastWasBlank = false;
+    }
+  }
+
+  htmlOutput = applyAutoTocAndSmooth(htmlOutput);
+  return htmlOutput.join('');
+}
+
+function buildFullDoc(bodyInner) {
+  return `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>轉換結果</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+    ${bodyInner}
+</body>
+</html>
+`;
+}
+
+/* =========================================================================
+ *  UI 連接
+ * ========================================================================= */
+const editor = document.getElementById('editor');
+const previewFrame = document.getElementById('previewFrame');
+const sourceBox = document.getElementById('sourceBox');
+const toastEl = document.getElementById('toast');
+
+let lastBodyInner = '';   // 最近一次轉換結果（body 內層，給複製/下載用）
+let lastFullDoc = '';
+
+function showToast(msg, isError) {
+  toastEl.textContent = msg;
+  toastEl.classList.toggle('err', !!isError);
+  toastEl.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+
+/* 工具列：execCommand */
+document.getElementById('toolbar').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-cmd]');
+  if (!btn) return;
+  editor.focus();
+  const cmd = btn.dataset.cmd;
+  const val = btn.dataset.val || null;
+  if (cmd === 'formatBlock') {
+    document.execCommand('formatBlock', false, val);
+  } else {
+    document.execCommand(cmd, false, null);
+  }
+});
+
+document.getElementById('linkBtn').addEventListener('click', () => {
+  editor.focus();
+  const url = prompt('輸入連結網址：', 'https://');
+  if (url) document.execCommand('createLink', false, url);
+});
+document.getElementById('unlinkBtn').addEventListener('click', () => {
+  editor.focus();
+  document.execCommand('unlink', false, null);
+});
+
+/* 轉換 */
+function doConvert() {
+  if (!editor.textContent.trim()) {
+    showToast('編輯區是空的，請先輸入內容', true);
+    return false;
+  }
+  lastBodyInner = convertEditor(editor);
+  lastFullDoc = buildFullDoc(lastBodyInner);
+  previewFrame.srcdoc = lastFullDoc;
+  sourceBox.value = lastBodyInner;
+  return true;
+}
+document.getElementById('convertBtn').addEventListener('click', () => {
+  if (doConvert()) showToast('已轉換，可在右側預覽');
+});
+
+/* 複製（rich paste）*/
+function fallbackCopyHtml(html) {
+  const div = document.createElement('div');
+  div.contentEditable = 'true';
+  div.style.position = 'fixed';
+  div.style.left = '-9999px';
+  div.innerHTML = html;
+  document.body.appendChild(div);
+  const range = document.createRange();
+  range.selectNodeContents(div);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  sel.removeAllRanges();
+  document.body.removeChild(div);
+  return ok;
+}
+
+async function copyContent() {
+  // 若尚未轉換，先自動轉換
+  if (!lastBodyInner && !doConvert()) return;
+  const html = lastBodyInner;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const plain = tmp.textContent || '';
+
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' })
+      })]);
+      showToast('已複製格式化內容，到 CMS 貼上即可');
+      return;
+    } catch (e) { /* 落到備援 */ }
+  }
+  if (fallbackCopyHtml(html)) {
+    showToast('已複製格式化內容，到 CMS 貼上即可');
+  } else {
+    showToast('複製失敗，請改用「下載 .html」', true);
+  }
+}
+document.getElementById('copyBtn').addEventListener('click', copyContent);
+
+/* 下載 */
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  if (!lastFullDoc && !doConvert()) return;
+  const blob = new Blob([lastFullDoc], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '轉換結果.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  showToast('已下載 轉換結果.html');
+});
+
+/* 清空 */
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!editor.textContent.trim() || confirm('確定清空編輯區與預覽？')) {
+    editor.innerHTML = '';
+    previewFrame.srcdoc = '';
+    sourceBox.value = '';
+    lastBodyInner = '';
+    lastFullDoc = '';
+    editor.focus();
+  }
+});
+
+/* 顯示 / 隱藏原始碼 */
+document.getElementById('toggleSource').addEventListener('click', () => {
+  sourceBox.style.display = sourceBox.style.display === 'block' ? 'none' : 'block';
+});
+</script>
+</body>
+</html>
