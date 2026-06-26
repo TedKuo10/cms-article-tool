@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>文章排版轉換工具</title>
+<title>Word → CMS 文章排版轉換工具</title>
 <style>
   :root {
     --accent: #4f8ef7;
@@ -54,42 +54,32 @@
     justify-content: space-between;
     gap: 8px;
   }
-  .toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
+  /* 上傳區 */
+  .dropzone {
+    margin: 18px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
     background: #fafbfc;
-  }
-  .toolbar button {
-    border: 1px solid var(--border);
-    background: #fff;
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 13px;
     cursor: pointer;
-    color: var(--text);
-    line-height: 1.2;
+    transition: border-color .15s, background .15s;
   }
-  .toolbar button:hover { background: #eef2f7; }
-  .toolbar .sep { width: 1px; background: var(--border); margin: 2px 4px; }
-  #editor {
-    min-height: 460px;
-    padding: 18px 20px;
-    outline: none;
-    font-size: 15px;
-    line-height: 1.7;
-    overflow-y: auto;
-    max-height: 70vh;
+  .dropzone:hover { border-color: var(--accent); background: #f2f7ff; }
+  .dropzone.dragover { border-color: var(--accent); background: #e8f1ff; }
+  .dz-inner { padding: 48px 20px; text-align: center; }
+  .dz-icon { font-size: 40px; line-height: 1; margin-bottom: 12px; }
+  .dz-main { font-size: 15px; color: var(--text); }
+  .dz-hint { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .linkbtn2 {
+    background: none; border: none; color: var(--accent);
+    font-size: 15px; cursor: pointer; padding: 0; text-decoration: underline;
   }
-  #editor:empty::before {
-    content: attr(data-placeholder);
-    color: #aab2bd;
+  .status { padding: 0 18px 6px; font-size: 13px; color: var(--text); min-height: 20px; }
+  .status.err { color: #b91c1c; }
+  .warnings {
+    margin: 0 18px 18px; font-size: 12px; color: var(--muted);
+    max-height: 120px; overflow-y: auto;
   }
-  #editor h1 { font-size: 1.6em; }
-  #editor h2 { font-size: 1.35em; color: #036; }
-  #editor h3 { font-size: 1.15em; }
+  .warnings ul { margin: 6px 0 0; padding-left: 18px; }
   .actions {
     display: flex;
     flex-wrap: wrap;
@@ -107,10 +97,11 @@
     font-weight: 600;
     cursor: pointer;
   }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
   .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { background: #3b7de0; }
+  .btn-primary:not(:disabled):hover { background: #3b7de0; }
   .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
-  .btn-secondary:hover { background: #eef2f7; }
+  .btn-secondary:not(:disabled):hover { background: #eef2f7; }
   #previewFrame {
     width: 100%;
     height: 70vh;
@@ -154,35 +145,27 @@
 </head>
 <body>
 <header>
-  <h1>文章排版轉換工具</h1>
-  <p>從 Word 貼上內容 → 標記標題與格式 → 轉換成符合 CMS 樣式的內容 → 一鍵複製貼進 CMS。所有處理都在你的瀏覽器本機完成，內容不會上傳。</p>
+  <h1>Word → CMS 文章排版轉換工具</h1>
+  <p>上傳 Word 檔（.docx）→ 自動轉成符合 CMS 樣式的內容 → 一鍵複製貼進 CMS。所有處理都在你的瀏覽器本機完成，檔案不會上傳。</p>
 </header>
 
 <main>
-  <!-- 編輯區 -->
+  <!-- 上傳區 -->
   <section class="panel">
     <div class="panel-title">
-      <span>① 編輯內容</span>
-      <span style="font-weight:400; color:var(--muted);">可直接從 Word 複製貼上</span>
+      <span>① 上傳 Word 檔</span>
+      <span style="font-weight:400; color:var(--muted);">支援 .docx</span>
     </div>
-    <div class="toolbar" id="toolbar">
-      <button type="button" data-cmd="formatBlock" data-val="h1" title="大標題 H1">H1</button>
-      <button type="button" data-cmd="formatBlock" data-val="h2" title="中標題 H2">H2</button>
-      <button type="button" data-cmd="formatBlock" data-val="h3" title="小標題 H3">H3</button>
-      <button type="button" data-cmd="formatBlock" data-val="p" title="一般內文">內文</button>
-      <span class="sep"></span>
-      <button type="button" data-cmd="bold" title="粗體"><b>B</b></button>
-      <button type="button" data-cmd="italic" title="斜體"><i>I</i></button>
-      <span class="sep"></span>
-      <button type="button" data-cmd="insertUnorderedList" title="項目清單">• 清單</button>
-      <button type="button" data-cmd="insertOrderedList" title="編號清單">1. 清單</button>
-      <span class="sep"></span>
-      <button type="button" id="linkBtn" title="插入超連結">🔗 連結</button>
-      <button type="button" id="unlinkBtn" title="移除超連結">取消連結</button>
-      <span class="sep"></span>
-      <button type="button" data-cmd="removeFormat" title="清除文字格式">清除格式</button>
+    <div id="dropzone" class="dropzone">
+      <input type="file" id="fileInput" accept=".docx" hidden>
+      <div class="dz-inner">
+        <div class="dz-icon">📄</div>
+        <div class="dz-main">把 .docx 檔拖到這裡，或<button type="button" id="pickBtn" class="linkbtn2">點此選擇檔案</button></div>
+        <div class="dz-hint">在 Word／Google Docs 用「標題樣式」設好 H1 / H2 / H3，再上傳<br>（Google Docs 請先用「檔案 → 下載 → Microsoft Word (.docx)」）</div>
+      </div>
     </div>
-    <div id="editor" contenteditable="true" data-placeholder="在這裡貼上文章內容，或直接打字…"></div>
+    <div id="status" class="status"></div>
+    <div id="warnings" class="warnings"></div>
   </section>
 
   <!-- 預覽區 -->
@@ -197,26 +180,29 @@
 </main>
 
 <div class="actions">
-  <button type="button" class="btn btn-primary" id="convertBtn">轉換 →</button>
-  <button type="button" class="btn btn-primary" id="copyBtn">複製內容（貼進 CMS）</button>
-  <button type="button" class="btn btn-secondary" id="downloadBtn">下載 .html</button>
+  <button type="button" class="btn btn-primary" id="copyBtn" disabled>複製內容（貼進 CMS）</button>
+  <button type="button" class="btn btn-secondary" id="downloadBtn" disabled>下載 .html</button>
   <span class="spacer"></span>
-  <button type="button" class="btn btn-secondary" id="clearBtn">清空</button>
+  <button type="button" class="btn btn-secondary" id="clearBtn">換一個檔</button>
 </div>
 
+<!-- mammoth 轉出的乾淨 HTML 暫存在這（不顯示），供轉換器讀取 -->
+<div id="container" style="display:none"></div>
 <div class="toast" id="toast"></div>
 
+<script src="vendor/mammoth.browser.min.js"></script>
 <script>
 "use strict";
 
 /* =========================================================================
- *  文章排版轉換工具 —— 純前端，無外部相依
- *  轉換規則忠實移植自原本的 Colab Python 腳本
- *  (convert_docx_to_html + apply_auto_toc_and_smooth + table_to_html)
- *  差異（依需求刻意調整）：
- *   - 保留粗體 <strong> / 斜體 <em>（原 Python 會丟掉）
- *   - 新增清單 <ul>/<ol> 輸出
- *   - 標題以編輯器中的真實 h1/h2/h3 標籤偵測
+ *  Word → CMS 文章排版轉換工具
+ *  輸入：上傳 .docx → 用 mammoth.js 轉成乾淨語意 HTML
+ *  輸出：套用與舊 Colab 工具相同的樣式規則
+ *  (convert_docx_to_html + apply_auto_toc_and_smooth + table_to_html 的移植)
+ *  規則：
+ *   - 保留粗體 <strong> / 斜體 <em>
+ *   - 清單 <ul>/<ol> 輸出
+ *   - 標題以 mammoth 產出的 h1/h2/h3 偵測（依 Word 標題樣式）
  *   - H2 色碼 #07788 完全照原樣保留（未修正）
  *   - H1 不輸出（比照舊工具）
  * ========================================================================= */
@@ -231,7 +217,7 @@ function escapeAttr(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/* 判斷「邏輯上」的標題層級：真實 h1-h3，或 Word 貼上的 MsoHeading 類別 */
+/* 判斷「邏輯上」的標題層級：真實 h1-h3，或殘留的 MsoHeading 類別 */
 function logicalTag(el) {
   const t = el.tagName.toLowerCase();
   if (t === 'h1' || t === 'h2' || t === 'h3') return t;
@@ -271,7 +257,7 @@ function serializeInline(node) {
   return out;
 }
 
-/* 處理 <span style="font-weight:bold"> 之類的（Word 常見）*/
+/* 處理 <span style="font-weight:bold"> 之類的 */
 function wrapByStyle(el) {
   let inner = serializeInline(el);
   const style = (el.getAttribute('style') || '').toLowerCase();
@@ -321,7 +307,7 @@ function tableToHtml(table) {
   return html.join('');
 }
 
-/* ---------- 把編輯器內容整理成最上層 block 陣列 ---------- */
+/* ---------- 把內容整理成最上層 block 陣列 ---------- */
 const BLOCK_SELECTOR = 'h1,h2,h3,h4,h5,h6,p,ul,ol,table,blockquote,pre';
 function collectBlocks(parent, blocks) {
   let pending = null;
@@ -347,9 +333,7 @@ function collectBlocks(parent, blocks) {
       return;
     }
 
-    // 2) 非 block 容器（div / b / span / font / section…），但內部含 block。
-    //    例如 Google Docs 會把整篇包在 <b style="font-weight:normal" id="docs-internal-guid-…"> 裡，
-    //    必須遞迴穿透，否則整篇會被當成一大段行內文字。
+    // 2) 非 block 容器但內部含 block → 遞迴穿透
     if (node.querySelector(BLOCK_SELECTOR)) {
       flush();
       collectBlocks(node, blocks);
@@ -366,7 +350,7 @@ function collectBlocks(parent, blocks) {
       return;
     }
 
-    // 4) 純行內內容（span / b / i / a / font…）→ 累積成段落
+    // 4) 純行內內容 → 累積成段落
     if (!pending) pending = document.createElement('p');
     pending.appendChild(node.cloneNode(true));
   });
@@ -439,9 +423,9 @@ function applyAutoTocAndSmooth(htmlList) {
 }
 
 /* ---------- 主轉換（移植 convert_docx_to_html 的主迴圈）---------- */
-function convertEditor(editor) {
+function convertDoc(container) {
   const blocks = [];
-  collectBlocks(editor, blocks);
+  collectBlocks(container, blocks);
 
   let htmlOutput = [];
   let lastWasBlank = false;
@@ -482,7 +466,7 @@ function convertEditor(editor) {
     if (!text) continue;
 
     const contentHtml = serializeInline(el);
-    // 標題整行已由模板的 <strong> 加粗，移除內層多餘的 strong（避免 Google Docs 來源產生巢狀 <strong>）
+    // 標題整行已由模板的 <strong> 加粗，移除內層多餘的 strong
     const headingContent = contentHtml.replace(/<\/?strong>/g, '');
 
     if (tag === 'h2') {
@@ -543,9 +527,16 @@ function buildFullDoc(bodyInner) {
 /* =========================================================================
  *  UI 連接
  * ========================================================================= */
-const editor = document.getElementById('editor');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const pickBtn = document.getElementById('pickBtn');
+const container = document.getElementById('container');
 const previewFrame = document.getElementById('previewFrame');
 const sourceBox = document.getElementById('sourceBox');
+const statusEl = document.getElementById('status');
+const warningsEl = document.getElementById('warnings');
+const copyBtn = document.getElementById('copyBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 const toastEl = document.getElementById('toast');
 
 let lastBodyInner = '';   // 最近一次轉換結果（body 內層，給複製/下載用）
@@ -558,45 +549,69 @@ function showToast(msg, isError) {
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => toastEl.classList.remove('show'), 2200);
 }
-
-/* 工具列：execCommand */
-document.getElementById('toolbar').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-cmd]');
-  if (!btn) return;
-  editor.focus();
-  const cmd = btn.dataset.cmd;
-  const val = btn.dataset.val || null;
-  if (cmd === 'formatBlock') {
-    document.execCommand('formatBlock', false, val);
-  } else {
-    document.execCommand(cmd, false, null);
-  }
-});
-
-document.getElementById('linkBtn').addEventListener('click', () => {
-  editor.focus();
-  const url = prompt('輸入連結網址：', 'https://');
-  if (url) document.execCommand('createLink', false, url);
-});
-document.getElementById('unlinkBtn').addEventListener('click', () => {
-  editor.focus();
-  document.execCommand('unlink', false, null);
-});
-
-/* 轉換 */
-function doConvert() {
-  if (!editor.textContent.trim()) {
-    showToast('編輯區是空的，請先輸入內容', true);
-    return false;
-  }
-  lastBodyInner = convertEditor(editor);
-  lastFullDoc = buildFullDoc(lastBodyInner);
-  previewFrame.srcdoc = lastFullDoc;
-  sourceBox.value = lastBodyInner;
-  return true;
+function setStatus(msg, isError) {
+  statusEl.textContent = msg || '';
+  statusEl.classList.toggle('err', !!isError);
 }
-document.getElementById('convertBtn').addEventListener('click', () => {
-  if (doConvert()) showToast('已轉換，可在右側預覽');
+
+/* mammoth 設定：忽略圖片（與舊工具一致，且避免 base64 撐大輸出） */
+const mammothOptions = {
+  convertImage: mammoth.images.imgElement(function () { return { src: '' }; })
+};
+
+/* 處理上傳的 .docx */
+async function handleFile(file) {
+  if (!file) return;
+  if (!/\.docx$/i.test(file.name)) {
+    setStatus('請上傳 .docx 檔（若是舊版 .doc 或 Google Docs，請先另存／下載成 .docx）', true);
+    return;
+  }
+  setStatus('正在轉換：' + file.name + ' …');
+  warningsEl.innerHTML = '';
+  try {
+    const buf = await file.arrayBuffer();
+    const result = await mammoth.convertToHtml({ arrayBuffer: buf }, mammothOptions);
+    container.innerHTML = result.value;
+    container.querySelectorAll('img').forEach(img => img.remove()); // 移除圖片
+
+    lastBodyInner = convertDoc(container);
+    lastFullDoc = buildFullDoc(lastBodyInner);
+    previewFrame.srcdoc = lastFullDoc;
+    sourceBox.value = lastBodyInner;
+
+    copyBtn.disabled = false;
+    downloadBtn.disabled = false;
+    setStatus('✅ 已轉換：' + file.name + '（右側可預覽，按「複製內容」貼進 CMS）');
+    renderWarnings(result.messages);
+    showToast('轉換完成');
+  } catch (e) {
+    console.error(e);
+    setStatus('轉換失敗：' + (e && e.message ? e.message : e), true);
+    showToast('轉換失敗', true);
+  }
+}
+
+function renderWarnings(messages) {
+  if (!messages || !messages.length) { warningsEl.innerHTML = ''; return; }
+  const items = messages.slice(0, 20).map(m => `<li>${escapeHtml(m.message || String(m))}</li>`).join('');
+  const more = messages.length > 20 ? `<li>…還有 ${messages.length - 20} 則</li>` : '';
+  warningsEl.innerHTML = `轉換提示（不影響使用，僅供參考）：<ul>${items}${more}</ul>`;
+}
+
+/* 上傳事件：點選、拖放 */
+pickBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+['dragenter', 'dragover'].forEach(ev =>
+  dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); })
+);
+['dragleave', 'drop'].forEach(ev =>
+  dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); })
+);
+dropzone.addEventListener('drop', (e) => {
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) handleFile(file);
 });
 
 /* 複製（rich paste）*/
@@ -620,8 +635,7 @@ function fallbackCopyHtml(html) {
 }
 
 async function copyContent() {
-  // 若尚未轉換，先自動轉換
-  if (!lastBodyInner && !doConvert()) return;
+  if (!lastBodyInner) { showToast('請先上傳檔案', true); return; }
   const html = lastBodyInner;
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
@@ -643,11 +657,11 @@ async function copyContent() {
     showToast('複製失敗，請改用「下載 .html」', true);
   }
 }
-document.getElementById('copyBtn').addEventListener('click', copyContent);
+copyBtn.addEventListener('click', copyContent);
 
 /* 下載 */
-document.getElementById('downloadBtn').addEventListener('click', () => {
-  if (!lastFullDoc && !doConvert()) return;
+downloadBtn.addEventListener('click', () => {
+  if (!lastFullDoc) { showToast('請先上傳檔案', true); return; }
   const blob = new Blob([lastFullDoc], { type: 'text/html;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -659,16 +673,18 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
   showToast('已下載 轉換結果.html');
 });
 
-/* 清空 */
+/* 換一個檔 */
 document.getElementById('clearBtn').addEventListener('click', () => {
-  if (!editor.textContent.trim() || confirm('確定清空編輯區與預覽？')) {
-    editor.innerHTML = '';
-    previewFrame.srcdoc = '';
-    sourceBox.value = '';
-    lastBodyInner = '';
-    lastFullDoc = '';
-    editor.focus();
-  }
+  fileInput.value = '';
+  container.innerHTML = '';
+  previewFrame.srcdoc = '';
+  sourceBox.value = '';
+  warningsEl.innerHTML = '';
+  lastBodyInner = '';
+  lastFullDoc = '';
+  copyBtn.disabled = true;
+  downloadBtn.disabled = true;
+  setStatus('');
 });
 
 /* 顯示 / 隱藏原始碼 */
