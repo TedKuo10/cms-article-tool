@@ -322,6 +322,7 @@ function tableToHtml(table) {
 }
 
 /* ---------- 把編輯器內容整理成最上層 block 陣列 ---------- */
+const BLOCK_SELECTOR = 'h1,h2,h3,h4,h5,h6,p,ul,ol,table,blockquote,pre';
 function collectBlocks(parent, blocks) {
   let pending = null;
   const flush = () => {
@@ -338,25 +339,36 @@ function collectBlocks(parent, blocks) {
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const t = node.tagName.toLowerCase();
-    if (t === 'div') {
-      const hasBlockChild = Array.from(node.children).some(c => BLOCK_TAGS.has(c.tagName.toLowerCase()));
-      if (hasBlockChild) {
-        flush();
-        collectBlocks(node, blocks);
-      } else {
-        flush();
-        const p = document.createElement('p');
-        p.className = node.className || '';
-        Array.from(node.childNodes).forEach(c => p.appendChild(c.cloneNode(true)));
-        if (p.textContent.trim()) blocks.push(p);
-      }
-    } else if (BLOCK_TAGS.has(t)) {
+
+    // 1) 本身就是 block 元素 → 直接收
+    if (BLOCK_TAGS.has(t)) {
       flush();
       blocks.push(node);
-    } else {
-      if (!pending) pending = document.createElement('p');
-      pending.appendChild(node.cloneNode(true));
+      return;
     }
+
+    // 2) 非 block 容器（div / b / span / font / section…），但內部含 block。
+    //    例如 Google Docs 會把整篇包在 <b style="font-weight:normal" id="docs-internal-guid-…"> 裡，
+    //    必須遞迴穿透，否則整篇會被當成一大段行內文字。
+    if (node.querySelector(BLOCK_SELECTOR)) {
+      flush();
+      collectBlocks(node, blocks);
+      return;
+    }
+
+    // 3) 沒有 block 子層的 <div> → 自成一段
+    if (t === 'div') {
+      flush();
+      const p = document.createElement('p');
+      p.className = node.className || '';
+      Array.from(node.childNodes).forEach(c => p.appendChild(c.cloneNode(true)));
+      if (p.textContent.trim()) blocks.push(p);
+      return;
+    }
+
+    // 4) 純行內內容（span / b / i / a / font…）→ 累積成段落
+    if (!pending) pending = document.createElement('p');
+    pending.appendChild(node.cloneNode(true));
   });
   flush();
 }
@@ -470,13 +482,15 @@ function convertEditor(editor) {
     if (!text) continue;
 
     const contentHtml = serializeInline(el);
+    // 標題整行已由模板的 <strong> 加粗，移除內層多餘的 strong（避免 Google Docs 來源產生巢狀 <strong>）
+    const headingContent = contentHtml.replace(/<\/?strong>/g, '');
 
     if (tag === 'h2') {
       htmlOutput.push(lastWasBlank ? '<p>&nbsp;</p>' : '<p>&nbsp;</p><p>&nbsp;</p>');
       htmlOutput.push(
         '<h2 style="padding-top:150px; margin-top:-150px;">' +
         '<span style="color:#07788;"><span style="font-size:20px;"><strong>' +
-        contentHtml +
+        headingContent +
         '</strong></span></span></h2>'
       );
       htmlOutput.push('<p>&nbsp;</p>');
@@ -489,7 +503,7 @@ function convertEditor(editor) {
       htmlOutput.push(
         '<h3 style="padding-top:150px; margin-top:-150px;">' +
         '<span style="color:#000000;"><span style="font-size:18px;"><strong>' +
-        contentHtml +
+        headingContent +
         '</strong></span></span></h3>'
       );
       htmlOutput.push('<p>&nbsp;</p>');
