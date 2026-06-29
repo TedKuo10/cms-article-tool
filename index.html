@@ -312,7 +312,7 @@ function tableToHtml(table) {
     Array.from(row.cells).forEach(cell => {
       let cellHtml = serializeCell(cell);
       if (rIndex === 0) cellHtml = `<strong>${cellHtml}</strong>`;
-      html.push(`<td style="border:1px solid #ccc; padding:6px; vertical-align:top;">${cellHtml}</td>`);
+      html.push(`<td style="border:1px solid #ccc; padding:6px; vertical-align:top; line-height:1.8;">${cellHtml}</td>`);
     });
     html.push('</tr>');
   });
